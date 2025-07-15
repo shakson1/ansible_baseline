@@ -1,0 +1,10 @@
+---
+# External role dependencies (if any)
+# Example:
+# - src: geerlingguy.security
+#   version: 1.0.0
+# - src: geerlingguy.monitoring
+#   version: 1.0.0
+
+# No external dependencies required for this baseline role
+[] 

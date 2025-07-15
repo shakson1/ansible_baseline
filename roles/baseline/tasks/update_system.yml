@@ -1,0 +1,36 @@
+---
+# Update system packages
+
+- name: Update package cache (Debian)
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Update package cache (RedHat)
+  dnf:
+    update_cache: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Upgrade all packages (Debian)
+  apt:
+    upgrade: yes
+    autoremove: yes
+  when: ansible_os_family == "Debian"
+
+- name: Upgrade all packages (RedHat)
+  dnf:
+    name: '*'
+    state: latest
+  when: ansible_os_family == "RedHat"
+
+- name: Clean package cache (Debian)
+  apt:
+    autoclean: yes
+    autoremove: yes
+  when: ansible_os_family == "Debian"
+
+- name: Clean package cache (RedHat)
+  dnf:
+    autoremove: yes
+  when: ansible_os_family == "RedHat" 

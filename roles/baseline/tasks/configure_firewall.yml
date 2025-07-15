@@ -1,0 +1,114 @@
+---
+# Configure firewall
+
+- name: Configure UFW firewall (Debian)
+  block:
+    - name: Reset UFW to default
+      ufw:
+        state: reset
+        direction: incoming
+        policy: deny
+
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        port: "{{ baseline_ssh_port }}"
+        proto: tcp
+
+    - name: Allow HTTP
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+
+    - name: Allow HTTPS
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+
+    - name: Allow additional ports
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ baseline_firewall_allowed_ports }}"
+      when: item != baseline_ssh_port and item != 80 and item != 443
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        logging: on
+
+  when: ansible_os_family == "Debian"
+
+- name: Configure firewalld (RedHat)
+  block:
+    - name: Start and enable firewalld
+      service:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: Configure default zone
+      firewalld:
+        zone: public
+        state: enabled
+        permanent: yes
+
+    - name: Allow SSH
+      firewalld:
+        port: "{{ baseline_ssh_port }}/tcp"
+        permanent: yes
+        state: enabled
+        zone: public
+
+    - name: Allow HTTP
+      firewalld:
+        port: 80/tcp
+        permanent: yes
+        state: enabled
+        zone: public
+
+    - name: Allow HTTPS
+      firewalld:
+        port: 443/tcp
+        permanent: yes
+        state: enabled
+        zone: public
+
+    - name: Allow additional ports
+      firewalld:
+        port: "{{ item }}/tcp"
+        permanent: yes
+        state: enabled
+        zone: public
+      loop: "{{ baseline_firewall_allowed_ports }}"
+      when: item != baseline_ssh_port and item != 80 and item != 443
+
+    - name: Reload firewalld
+      firewalld:
+        state: reloaded
+
+  when: ansible_os_family == "RedHat"
+
+- name: Configure fail2ban
+  block:
+    - name: Create fail2ban configuration
+      template:
+        src: fail2ban.jail.local.j2
+        dest: "{{ baseline_fail2ban_config }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable fail2ban
+      service:
+        name: fail2ban
+        state: started
+        enabled: yes
+
+    - name: Restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted 

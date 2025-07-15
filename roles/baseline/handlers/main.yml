@@ -1,0 +1,31 @@
+---
+# Handlers for baseline role
+
+- name: restart rsyslog
+  service:
+    name: "{{ baseline_logging_service }}"
+    state: restarted
+
+- name: restart auditd
+  service:
+    name: auditd
+    state: restarted
+
+- name: reload firewalld
+  firewalld:
+    state: reloaded
+
+- name: restart ssh
+  service:
+    name: "{{ baseline_ssh_service }}"
+    state: restarted
+
+- name: restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+
+- name: reload sysctl
+  sysctl:
+    name: "*"
+    state: reloaded 

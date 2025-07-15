@@ -1,0 +1,55 @@
+---
+# User management tasks
+
+- name: Create admin group
+  group:
+    name: "{{ baseline_admin_user }}"
+    state: present
+
+- name: Create admin user
+  user:
+    name: "{{ baseline_admin_user }}"
+    password: "{{ baseline_admin_password | password_hash('sha512') }}"
+    groups: "{{ baseline_admin_user }},sudo"
+    shell: /bin/bash
+    createhome: yes
+    state: present
+
+- name: Configure sudo access for admin user (Debian)
+  lineinfile:
+    path: /etc/sudoers.d/{{ baseline_admin_user }}
+    line: "{{ baseline_admin_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when: ansible_os_family == "Debian"
+
+- name: Configure sudo access for admin user (RedHat)
+  lineinfile:
+    path: /etc/sudoers.d/{{ baseline_admin_user }}
+    line: "{{ baseline_admin_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when: ansible_os_family == "RedHat"
+
+- name: Create .ssh directory for admin user
+  file:
+    path: "/home/{{ baseline_admin_user }}/.ssh"
+    state: directory
+    owner: "{{ baseline_admin_user }}"
+    group: "{{ baseline_admin_user }}"
+    mode: '0700'
+
+- name: Add SSH key for admin user
+  authorized_key:
+    user: "{{ baseline_admin_user }}"
+    key: "{{ baseline_ssh_key }}"
+    state: present
+  when: baseline_ssh_key | length > 0
+
+- name: Disable root login
+  user:
+    name: root
+    shell: /sbin/nologin
+  when: baseline_ssh_permit_root_login == false 

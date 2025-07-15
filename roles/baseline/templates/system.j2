@@ -1,0 +1,64 @@
+/var/log/messages {
+    rotate {{ baseline_log_retention_days }}
+    size {{ baseline_log_max_size }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
+
+/var/log/secure {
+    rotate {{ baseline_log_retention_days }}
+    size {{ baseline_log_max_size }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
+
+/var/log/maillog {
+    rotate {{ baseline_log_retention_days }}
+    size {{ baseline_log_max_size }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
+
+/var/log/cron {
+    rotate {{ baseline_log_retention_days }}
+    size {{ baseline_log_max_size }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
+
+/var/log/baseline/*.log {
+    rotate {{ baseline_log_retention_days }}
+    size {{ baseline_log_max_size }}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP `cat /var/run/rsyslogd.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+} 

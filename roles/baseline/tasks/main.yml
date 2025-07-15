@@ -1,0 +1,42 @@
+---
+# Main tasks file for baseline Linux setup
+
+- name: Include OS-specific variables
+  include_vars: "{{ ansible_os_family | lower }}.yml"
+  when: ansible_os_family in ['Debian', 'RedHat']
+
+- name: Update system packages
+  include_tasks: update_system.yml
+  when: baseline_update_system
+
+- name: Install essential packages
+  include_tasks: install_packages.yml
+
+- name: Configure system settings
+  include_tasks: configure_system.yml
+
+- name: Create admin user
+  include_tasks: user_management.yml
+
+- name: Configure SSH server
+  include_tasks: configure_ssh.yml
+  when: baseline_configure_ssh
+
+- name: Configure firewall
+  include_tasks: configure_firewall.yml
+  when: baseline_configure_firewall
+
+- name: Configure logging
+  include_tasks: configure_logging.yml
+  when: baseline_configure_logging
+
+- name: Configure network optimizations
+  include_tasks: configure_network.yml
+  when: baseline_configure_network
+
+- name: Install monitoring tools
+  include_tasks: install_monitoring.yml
+  when: baseline_install_monitoring
+
+- name: Final system restart if needed
+  include_tasks: final_restart.yml 

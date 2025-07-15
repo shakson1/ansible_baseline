@@ -1,0 +1,101 @@
+---
+- name: Baseline Linux Setup
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Admin user configuration
+    baseline_admin_user: admin
+    baseline_admin_password: "{{ vault_admin_password }}"
+    baseline_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    
+    # System configuration
+    baseline_timezone: UTC
+    baseline_hostname: "{{ inventory_hostname }}"
+    
+    # Feature toggles
+    baseline_install_monitoring: true
+    baseline_configure_firewall: true
+    baseline_configure_ssh: true
+    baseline_configure_logging: true
+    baseline_configure_network: true
+    baseline_update_system: true
+    
+    # SSH configuration
+    baseline_ssh_port: 22
+    baseline_ssh_permit_root_login: false
+    baseline_ssh_password_authentication: false
+    baseline_ssh_pubkey_authentication: true
+    
+    # Firewall configuration
+    baseline_firewall_allowed_ports:
+      - 22    # SSH
+      - 80    # HTTP
+      - 443   # HTTPS
+      - 8080  # Custom port (example)
+    
+    # Additional packages (optional)
+    baseline_essential_packages_debian:
+      - curl
+      - wget
+      - vim
+      - htop
+      - unzip
+      - git
+      - ufw
+      - fail2ban
+      - logrotate
+      - rsyslog
+      - ntp
+      - ntpdate
+      - tree
+      - jq
+      - tmux
+    
+    baseline_essential_packages_redhat:
+      - curl
+      - wget
+      - vim
+      - htop
+      - unzip
+      - git
+      - firewalld
+      - fail2ban
+      - logrotate
+      - rsyslog
+      - chrony
+      - epel-release
+      - tree
+      - jq
+      - tmux
+
+  roles:
+    - baseline
+
+  pre_tasks:
+    - name: Display target system information
+      debug:
+        msg: "Configuring baseline for {{ inventory_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }})"
+
+  post_tasks:
+    - name: Display completion message
+      debug:
+        msg: "Baseline configuration completed for {{ inventory_hostname }}"
+      
+    - name: Show system summary
+      shell: |
+        echo "=== System Summary ==="
+        echo "Hostname: $(hostname)"
+        echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+        echo "Kernel: $(uname -r)"
+        echo "Uptime: $(uptime -p)"
+        echo "Memory: $(free -h | grep Mem | awk '{print $2}')"
+        echo "Disk: $(df -h / | tail -1 | awk '{print $2}')"
+        echo "Active services: $(systemctl list-units --state=active | grep -c '.service')"
+      register: system_summary
+      changed_when: false
+      
+    - name: Display system summary
+      debug:
+        msg: "{{ system_summary.stdout_lines }}" 

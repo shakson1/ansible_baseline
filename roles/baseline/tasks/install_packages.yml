@@ -1,0 +1,37 @@
+---
+# Install essential packages
+
+- name: Install EPEL repository (RedHat)
+  dnf:
+    name: epel-release
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install essential packages (Debian)
+  apt:
+    name: "{{ baseline_essential_packages }}"
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install essential packages (RedHat)
+  dnf:
+    name: "{{ baseline_essential_packages }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install monitoring packages (Debian)
+  apt:
+    name: "{{ baseline_monitoring_packages }}"
+    state: present
+  when: 
+    - ansible_os_family == "Debian"
+    - baseline_install_monitoring
+
+- name: Install monitoring packages (RedHat)
+  dnf:
+    name: "{{ baseline_monitoring_packages }}"
+    state: present
+  when: 
+    - ansible_os_family == "RedHat"
+    - baseline_install_monitoring 

@@ -1,0 +1,54 @@
+---
+- name: Test Baseline Configuration
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    baseline_admin_user: admin
+    baseline_admin_password: "{{ vault_admin_password | default('test123') }}"
+    baseline_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') | default('ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC...') }}"
+    
+    # Disable potentially disruptive features for testing
+    baseline_configure_firewall: false
+    baseline_configure_ssh: false
+    baseline_update_system: false
+    baseline_install_monitoring: false
+
+  roles:
+    - baseline
+
+  tasks:
+    - name: Test system configuration
+      debug:
+        msg: "Testing baseline configuration on {{ inventory_hostname }}"
+      
+    - name: Verify admin user exists
+      user:
+        name: "{{ baseline_admin_user }}"
+        state: present
+      check_mode: yes
+      
+    - name: Verify essential packages are installed
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - curl
+        - wget
+        - vim
+        - htop
+      check_mode: yes
+      
+    - name: Verify system services
+      service:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - ssh
+        - rsyslog
+      check_mode: yes
+      
+    - name: Display test results
+      debug:
+        msg: "Baseline test completed successfully for {{ inventory_hostname }}" 

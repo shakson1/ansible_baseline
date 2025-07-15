@@ -1,0 +1,66 @@
+# Baseline audit rules for RedHat systems
+
+# Delete all previous rules
+-D
+
+# Set buffer size
+-b 8192
+
+# Failure mode
+-f 1
+
+# Set the rate limit
+-r 0
+
+# Make the configuration immutable -- reboot is required to change audit rules
+-e 2
+
+# Log all file access
+-a always,exit -F arch=b64 -S open,openat,creat,write,read,link,unlink,rename,chmod,chown,setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k file_access
+-a always,exit -F arch=b32 -S open,openat,creat,write,read,link,unlink,rename,chmod,chown,setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k file_access
+
+# Log all system administration actions
+-a always,exit -F arch=b64 -S chroot,chdir,setuid,setgid,setreuid,setregid,setresuid,setresgid -F auid>=1000 -F auid!=4294967295 -k admin_actions
+-a always,exit -F arch=b32 -S chroot,chdir,setuid,setgid,setreuid,setregid,setresuid,setresgid -F auid>=1000 -F auid!=4294967295 -k admin_actions
+
+# Log all network connections
+-a always,exit -F arch=b64 -S socket,bind,connect,accept,listen -F auid>=1000 -F auid!=4294967295 -k network_connections
+-a always,exit -F arch=b32 -S socket,bind,connect,accept,listen -F auid>=1000 -F auid!=4294967295 -k network_connections
+
+# Log all process creation
+-a always,exit -F arch=b64 -S execve,execveat -F auid>=1000 -F auid!=4294967295 -k process_creation
+-a always,exit -F arch=b32 -S execve,execveat -F auid>=1000 -F auid!=4294967295 -k process_creation
+
+# Log all user login/logout events
+-w /var/log/lastlog -p wa -k logins
+-w /var/run/faillock -p wa -k logins
+-w /var/log/wtmp -p wa -k logins
+-w /var/log/btmp -p wa -k logins
+
+# Log all sudo usage
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d/ -p wa -k scope
+
+# Log all password changes
+-w /etc/group -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/shadow -p wa -k identity
+
+# Log all system configuration changes
+-w /etc/hosts -p wa -k system-locale
+-w /etc/network/ -p wa -k system-locale
+-w /etc/networks -p wa -k system-locale
+-w /etc/issue -p wa -k system-locale
+-w /etc/issue.net -p wa -k system-locale
+-w /etc/inittab -p wa -k system-locale
+-w /etc/init.d/ -p wa -k system-locale
+-w /etc/rc.local -p wa -k system-locale
+-w /etc/rc.d/ -p wa -k system-locale
+
+# Log all kernel module loading/unloading
+-w /sbin/insmod -p x -k modules
+-w /sbin/rmmod -p x -k modules
+-w /sbin/modprobe -p x -k modules
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules
+-a always,exit -F arch=b32 -S init_module,finit_module,delete_module -k modules 

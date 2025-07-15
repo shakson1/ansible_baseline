@@ -1,0 +1,59 @@
+---
+# Configure basic system settings
+
+- name: Set timezone
+  timezone:
+    name: "{{ baseline_timezone }}"
+
+- name: Set hostname
+  hostname:
+    name: "{{ baseline_hostname }}"
+  when: baseline_hostname is defined
+
+- name: Configure locale (Debian)
+  locale_gen:
+    name: "{{ baseline_locale }}"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure locale (RedHat)
+  command: localedef -c -f UTF-8 -i en_US en_US.UTF-8
+  args:
+    creates: /usr/lib/locale/en_US.utf8
+  when: ansible_os_family == "RedHat"
+
+- name: Set system locale
+  lineinfile:
+    path: /etc/environment
+    line: "LANG={{ baseline_locale }}"
+    regexp: "^LANG="
+    state: present
+
+- name: Configure SELinux (RedHat)
+  seboolean:
+    name: ssh_keysign
+    state: yes
+    persistent: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Set SELinux state (RedHat)
+  selinux:
+    state: "{{ baseline_selinux_state }}"
+    policy: "{{ baseline_selinux_policy }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Configure system limits
+  pam_limits:
+    domain: '*'
+    limit_type: '-'
+    limit_item: nofile
+    value: 65536
+
+- name: Configure kernel parameters
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop: "{{ baseline_network_optimizations }}"
+  when: baseline_configure_network 

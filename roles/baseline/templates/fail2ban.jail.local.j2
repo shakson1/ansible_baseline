@@ -1,0 +1,38 @@
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 3
+backend = auto
+usedns = warn
+
+[sshd]
+enabled = true
+port = {{ baseline_ssh_port }}
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+
+[sshd-ddos]
+enabled = true
+port = {{ baseline_ssh_port }}
+filter = sshd-ddos
+logpath = /var/log/auth.log
+maxretry = 2
+bantime = 7200
+
+[apache]
+enabled = true
+port = http,https
+filter = apache-auth
+logpath = /var/log/apache2/error.log
+maxretry = 3
+bantime = 3600
+
+[apache-badbots]
+enabled = true
+port = http,https
+filter = apache-badbots
+logpath = /var/log/apache2/access.log
+maxretry = 2
+bantime = 7200 

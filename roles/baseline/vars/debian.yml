@@ -1,0 +1,35 @@
+---
+# Debian/Ubuntu specific variables
+
+# Package manager
+baseline_package_manager: apt
+baseline_update_cache_cmd: apt update
+baseline_upgrade_cmd: apt upgrade -y
+baseline_install_cmd: apt install -y
+
+# Essential packages for Debian
+baseline_essential_packages: "{{ baseline_essential_packages_debian }}"
+baseline_monitoring_packages: "{{ baseline_monitoring_packages_debian }}"
+
+# Service names
+baseline_ssh_service: ssh
+baseline_firewall_service: ufw
+baseline_ntp_service: systemd-timesyncd
+baseline_logging_service: rsyslog
+
+# Package names
+baseline_ssh_package: openssh-server
+baseline_firewall_package: ufw
+baseline_ntp_package: ntp
+baseline_logging_package: rsyslog
+baseline_fail2ban_package: fail2ban
+
+# Configuration file paths
+baseline_ssh_config: /etc/ssh/sshd_config
+baseline_firewall_config: /etc/default/ufw
+baseline_ntp_config: /etc/systemd/timesyncd.conf
+baseline_logging_config: /etc/rsyslog.conf
+baseline_fail2ban_config: /etc/fail2ban/jail.local
+
+# Network interface naming
+baseline_network_interface_pattern: "eth*|ens*|enp*" 

@@ -1,0 +1,17 @@
+# This file should be encrypted with ansible-vault
+# Command: ansible-vault encrypt group_vars/all/vault.yml
+
+# Admin user password (should be encrypted)
+vault_admin_password: "your_secure_password_here"
+
+# SSH private key (if needed)
+# vault_ssh_private_key: |
+#   -----BEGIN OPENSSH PRIVATE KEY-----
+#   your_private_key_content_here
+#   -----END OPENSSH PRIVATE KEY-----
+
+# Database passwords (if needed)
+# vault_db_password: "your_database_password"
+
+# API keys (if needed)
+# vault_api_key: "your_api_key_here" 

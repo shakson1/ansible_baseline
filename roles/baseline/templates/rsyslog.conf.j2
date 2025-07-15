@@ -1,0 +1,50 @@
+# rsyslog configuration file
+
+# Modules
+module(load="imuxsock") # provides support for local system logging
+module(load="imklog")   # provides kernel logging support
+module(load="imjournal") # provides access to the systemd journal
+
+# Global directives
+$ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+$FileOwner root
+$FileGroup root
+$FileCreateMode 0644
+$DirCreateMode 0755
+$Umask 0022
+$WorkDirectory /var/spool/rsyslog
+$IncludeConfig /etc/rsyslog.d/*.conf
+
+# Log all kernel messages to the console
+kern.*                                                  /dev/console
+
+# Log anything (except mail) of level info or higher
+*.info;mail.none;authpriv.none;cron.none                /var/log/messages
+
+# The authpriv file has restricted access
+authpriv.*                                              /var/log/secure
+
+# Log all the mail messages in one place
+mail.*                                                  /var/log/maillog
+
+# Log cron stuff
+cron.*                                                  /var/log/cron
+
+# Everybody gets emergency messages
+*.emerg                                                 :omusrmsg:*
+
+# Save news errors of level crit and higher in a special file
+uucp,news.crit                                          /var/log/spooler
+
+# Save boot messages also to boot.log
+local7.*                                                /var/log/boot.log
+
+# Baseline specific logging
+local0.*                                                /var/log/baseline/app.log
+local1.*                                                /var/log/baseline/security.log
+local2.*                                                /var/log/baseline/network.log
+
+# Remote logging (if configured)
+{% if baseline_remote_syslog is defined %}
+*.*                                                     @{{ baseline_remote_syslog }}
+{% endif %} 

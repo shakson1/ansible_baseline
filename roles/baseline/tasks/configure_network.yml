@@ -1,0 +1,72 @@
+---
+# Configure network settings
+
+- name: Configure NTP/Chrony (Debian)
+  block:
+    - name: Configure systemd-timesyncd
+      template:
+        src: timesyncd.conf.j2
+        dest: "{{ baseline_ntp_config }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable systemd-timesyncd
+      service:
+        name: systemd-timesyncd
+        state: started
+        enabled: yes
+
+  when: ansible_os_family == "Debian"
+
+- name: Configure NTP/Chrony (RedHat)
+  block:
+    - name: Configure chrony
+      template:
+        src: chrony.conf.j2
+        dest: "{{ baseline_ntp_config }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable chronyd
+      service:
+        name: chronyd
+        state: started
+        enabled: yes
+
+  when: ansible_os_family == "RedHat"
+
+- name: Configure network interfaces
+  template:
+    src: network.j2
+    dest: /etc/sysctl.d/99-network.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply network configuration
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop: "{{ baseline_network_optimizations }}"
+
+- name: Configure DNS resolvers
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: baseline_dns_servers is defined
+
+- name: Configure hosts file
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+  when: baseline_hosts is defined 

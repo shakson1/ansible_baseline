@@ -1,0 +1,90 @@
+---
+# Install and configure monitoring tools
+
+- name: Install monitoring packages
+  package:
+    name: "{{ baseline_monitoring_packages }}"
+    state: present
+
+- name: Configure sar collection (Debian)
+  lineinfile:
+    path: /etc/default/sysstat
+    regexp: "^ENABLED="
+    line: "ENABLED=\"true\""
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure sar collection (RedHat)
+  lineinfile:
+    path: /etc/sysconfig/sysstat
+    regexp: "^ENABLED="
+    line: "ENABLED=\"true\""
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Start and enable sysstat
+  service:
+    name: sysstat
+    state: started
+    enabled: yes
+
+- name: Create monitoring scripts directory
+  file:
+    path: /usr/local/bin/monitoring
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create system monitoring script
+  template:
+    src: system_monitor.sh.j2
+    dest: /usr/local/bin/monitoring/system_monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create disk monitoring script
+  template:
+    src: disk_monitor.sh.j2
+    dest: /usr/local/bin/monitoring/disk_monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create network monitoring script
+  template:
+    src: network_monitor.sh.j2
+    dest: /usr/local/bin/monitoring/network_monitor.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure monitoring cron jobs
+  cron:
+    name: "{{ item.name }}"
+    job: "{{ item.job }}"
+    hour: "{{ item.hour }}"
+    minute: "{{ item.minute }}"
+    user: root
+  loop:
+    - name: "System monitoring"
+      job: "/usr/local/bin/monitoring/system_monitor.sh"
+      hour: "*"
+      minute: "*/5"
+    - name: "Disk monitoring"
+      job: "/usr/local/bin/monitoring/disk_monitor.sh"
+      hour: "*"
+      minute: "*/15"
+    - name: "Network monitoring"
+      job: "/usr/local/bin/monitoring/network_monitor.sh"
+      hour: "*"
+      minute: "*/10"
+
+- name: Create monitoring log directory
+  file:
+    path: /var/log/monitoring
+    state: directory
+    owner: root
+    group: root
+    mode: '0755' 

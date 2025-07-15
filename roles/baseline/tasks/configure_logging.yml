@@ -1,0 +1,73 @@
+---
+# Configure logging
+
+- name: Configure rsyslog
+  template:
+    src: rsyslog.conf.j2
+    dest: "{{ baseline_logging_config }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rsyslog
+
+- name: Configure logrotate
+  template:
+    src: logrotate.conf.j2
+    dest: /etc/logrotate.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create logrotate directory
+  file:
+    path: /etc/logrotate.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure system log rotation
+  template:
+    src: system.j2
+    dest: /etc/logrotate.d/system
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Start and enable rsyslog
+  service:
+    name: "{{ baseline_logging_service }}"
+    state: started
+    enabled: yes
+
+- name: Create log directory
+  file:
+    path: /var/log/baseline
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure audit logging (RedHat)
+  block:
+    - name: Install audit package
+      dnf:
+        name: audit
+        state: present
+
+    - name: Start and enable auditd
+      service:
+        name: auditd
+        state: started
+        enabled: yes
+
+    - name: Configure audit rules
+      template:
+        src: audit.rules.j2
+        dest: /etc/audit/rules.d/baseline.rules
+        owner: root
+        group: root
+        mode: '0640'
+      notify: restart auditd
+
+  when: ansible_os_family == "RedHat" 

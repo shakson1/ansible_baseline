@@ -1,0 +1,39 @@
+---
+# RedHat/CentOS/Rocky Linux specific variables
+
+# Package manager
+baseline_package_manager: dnf
+baseline_update_cache_cmd: dnf update -y
+baseline_upgrade_cmd: dnf upgrade -y
+baseline_install_cmd: dnf install -y
+
+# Essential packages for RedHat
+baseline_essential_packages: "{{ baseline_essential_packages_redhat }}"
+baseline_monitoring_packages: "{{ baseline_monitoring_packages_redhat }}"
+
+# Service names
+baseline_ssh_service: sshd
+baseline_firewall_service: firewalld
+baseline_ntp_service: chronyd
+baseline_logging_service: rsyslog
+
+# Package names
+baseline_ssh_package: openssh-server
+baseline_firewall_package: firewalld
+baseline_ntp_package: chrony
+baseline_logging_package: rsyslog
+baseline_fail2ban_package: fail2ban
+
+# Configuration file paths
+baseline_ssh_config: /etc/ssh/sshd_config
+baseline_firewall_config: /etc/firewalld/firewalld.conf
+baseline_ntp_config: /etc/chrony.conf
+baseline_logging_config: /etc/rsyslog.conf
+baseline_fail2ban_config: /etc/fail2ban/jail.local
+
+# Network interface naming
+baseline_network_interface_pattern: "eth*|ens*|enp*"
+
+# SELinux configuration
+baseline_selinux_state: enforcing
+baseline_selinux_policy: targeted 

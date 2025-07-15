@@ -1,0 +1,91 @@
+---
+# Admin user configuration
+baseline_admin_user: admin
+baseline_admin_password: "{{ vault_admin_password | default('changeme') }}"
+baseline_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') | default('') }}"
+
+# System configuration
+baseline_timezone: UTC
+baseline_hostname: "{{ inventory_hostname }}"
+baseline_locale: en_US.UTF-8
+
+# Feature toggles
+baseline_install_monitoring: true
+baseline_configure_firewall: true
+baseline_configure_ssh: true
+baseline_configure_logging: true
+baseline_configure_network: true
+baseline_update_system: true
+
+# SSH configuration
+baseline_ssh_port: 22
+baseline_ssh_permit_root_login: false
+baseline_ssh_password_authentication: false
+baseline_ssh_pubkey_authentication: true
+baseline_ssh_max_auth_tries: 3
+baseline_ssh_client_alive_interval: 300
+baseline_ssh_client_alive_count_max: 2
+
+# Firewall configuration
+baseline_firewall_allowed_ports:
+  - 22    # SSH
+  - 80    # HTTP
+  - 443   # HTTPS
+baseline_firewall_allowed_networks: []
+
+# Package lists
+baseline_essential_packages_debian:
+  - curl
+  - wget
+  - vim
+  - htop
+  - unzip
+  - git
+  - ufw
+  - fail2ban
+  - logrotate
+  - rsyslog
+  - ntp
+  - ntpdate
+
+baseline_essential_packages_redhat:
+  - curl
+  - wget
+  - vim
+  - htop
+  - unzip
+  - git
+  - firewalld
+  - fail2ban
+  - logrotate
+  - rsyslog
+  - chrony
+  - epel-release
+
+baseline_monitoring_packages_debian:
+  - htop
+  - iotop
+  - nethogs
+  - nload
+  - sysstat
+
+baseline_monitoring_packages_redhat:
+  - htop
+  - iotop
+  - nethogs
+  - nload
+  - sysstat
+
+# Logging configuration
+baseline_log_retention_days: 30
+baseline_log_max_size: 100M
+
+# Network configuration
+baseline_network_optimizations:
+  - net.core.rmem_max: 16777216
+  - net.core.wmem_max: 16777216
+  - net.ipv4.tcp_rmem: "4096 87380 16777216"
+  - net.ipv4.tcp_wmem: "4096 65536 16777216"
+  - net.ipv4.tcp_congestion_control: bbr
+  - net.core.netdev_max_backlog: 5000
+  - net.ipv4.tcp_max_syn_backlog: 4096 

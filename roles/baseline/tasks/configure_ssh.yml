@@ -1,0 +1,92 @@
+---
+# Configure SSH server
+
+- name: Backup SSH configuration
+  copy:
+    src: "{{ baseline_ssh_config }}"
+    dest: "{{ baseline_ssh_config }}.backup"
+    remote_src: yes
+  when: ansible_check_mode is not defined
+
+- name: Configure SSH port
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?Port "
+    line: "Port {{ baseline_ssh_port }}"
+    state: present
+
+- name: Disable root login
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?PermitRootLogin "
+    line: "PermitRootLogin {{ 'yes' if baseline_ssh_permit_root_login else 'no' }}"
+    state: present
+
+- name: Configure password authentication
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?PasswordAuthentication "
+    line: "PasswordAuthentication {{ 'yes' if baseline_ssh_password_authentication else 'no' }}"
+    state: present
+
+- name: Configure public key authentication
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?PubkeyAuthentication "
+    line: "PubkeyAuthentication {{ 'yes' if baseline_ssh_pubkey_authentication else 'no' }}"
+    state: present
+
+- name: Configure maximum authentication attempts
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?MaxAuthTries "
+    line: "MaxAuthTries {{ baseline_ssh_max_auth_tries }}"
+    state: present
+
+- name: Configure client alive interval
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?ClientAliveInterval "
+    line: "ClientAliveInterval {{ baseline_ssh_client_alive_interval }}"
+    state: present
+
+- name: Configure client alive count max
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?ClientAliveCountMax "
+    line: "ClientAliveCountMax {{ baseline_ssh_client_alive_count_max }}"
+    state: present
+
+- name: Disable X11 forwarding
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?X11Forwarding "
+    line: "X11Forwarding no"
+    state: present
+
+- name: Disable agent forwarding
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?AllowAgentForwarding "
+    line: "AllowAgentForwarding no"
+    state: present
+
+- name: Configure protocol version
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?Protocol "
+    line: "Protocol 2"
+    state: present
+
+- name: Configure login grace time
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?LoginGraceTime "
+    line: "LoginGraceTime 60"
+    state: present
+
+- name: Restart SSH service
+  service:
+    name: "{{ baseline_ssh_service }}"
+    state: restarted
+    enabled: yes 
