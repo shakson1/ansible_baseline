@@ -1,0 +1,536 @@
+---
+# Advanced monitoring and alerting tasks
+
+- name: Install additional monitoring packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - prometheus-node-exporter
+    - grafana-agent
+    - telegraf
+    - collectd
+    - netdata
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure Prometheus Node Exporter
+  block:
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+        home: /var/lib/node_exporter
+        create_home: no
+
+    - name: Create node_exporter service file
+      copy:
+        content: |
+          [Unit]
+          Description=Prometheus Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/bin/node_exporter
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/node_exporter.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable node_exporter
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure Grafana Agent
+  block:
+    - name: Create grafana-agent configuration
+      copy:
+        content: |
+          server:
+            log_level: info
+            http_listen_port: 12345
+
+          metrics:
+            global:
+              scrape_interval: 15s
+            configs:
+              - name: integrations
+                remote_write:
+                  - url: "{{ baseline_grafana_agent_remote_write_url | default('http://localhost:9090/api/v1/write') }}"
+                scrape_configs:
+                  - job_name: 'node_exporter'
+                    static_configs:
+                      - targets: ['localhost:9100']
+                  - job_name: 'prometheus'
+                    static_configs:
+                      - targets: ['localhost:9090']
+
+          logs:
+            configs:
+              - name: default
+                clients:
+                  - url: "{{ baseline_grafana_agent_logs_url | default('http://localhost:3100/loki/api/v1/push') }}"
+                scrape_configs:
+                  - job_name: 'system'
+                    static_configs:
+                      - targets: [localhost]
+                        labels:
+                          job: varlogs
+                          __path__: /var/log/*log
+        dest: /etc/grafana-agent.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable grafana-agent
+      systemd:
+        name: grafana-agent
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure Telegraf
+  block:
+    - name: Create telegraf configuration
+      copy:
+        content: |
+          [agent]
+            interval = "10s"
+            round_interval = true
+            metric_batch_size = 1000
+            metric_buffer_limit = 10000
+            collection_jitter = "0s"
+            flush_interval = "10s"
+            flush_jitter = "0s"
+            precision = ""
+            hostname = "{{ inventory_hostname }}"
+            omit_hostname = false
+
+          [[outputs.influxdb]]
+            urls = ["{{ baseline_telegraf_influxdb_url | default('http://localhost:8086') }}"]
+            database = "{{ baseline_telegraf_database | default('telegraf') }}"
+            username = "{{ baseline_telegraf_username | default('telegraf') }}"
+            password = "{{ baseline_telegraf_password | default('password') }}"
+
+          [[inputs.cpu]]
+            percpu = true
+            totalcpu = true
+            collect_cpu_time = false
+            report_active = false
+
+          [[inputs.disk]]
+            ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs"]
+
+          [[inputs.diskio]]
+
+          [[inputs.kernel]]
+
+          [[inputs.mem]]
+
+          [[inputs.processes]]
+
+          [[inputs.swap]]
+
+          [[inputs.system]]
+
+          [[inputs.net]]
+
+          [[inputs.netstat]]
+
+          [[inputs.interrupts]]
+
+          [[inputs.linux_sysctl_fs]]
+
+          [[inputs.systemd_units]]
+            pattern = ".*"
+            detail = false
+        dest: /etc/telegraf/telegraf.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable telegraf
+      systemd:
+        name: telegraf
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure Collectd
+  block:
+    - name: Create collectd configuration
+      copy:
+        content: |
+          Hostname "{{ inventory_hostname }}"
+          FQDNLookup true
+          BaseDir "/var/lib/collectd"
+          PIDFile "/var/lib/collectd/collectd.pid"
+          PluginDir "/usr/lib/collectd"
+          TypesDB "/usr/share/collectd/types.db"
+
+          LoadPlugin syslog
+          <Plugin syslog>
+            LogLevel info
+          </Plugin>
+
+          LoadPlugin cpu
+          LoadPlugin df
+          LoadPlugin disk
+          LoadPlugin interface
+          LoadPlugin load
+          LoadPlugin memory
+          LoadPlugin processes
+          LoadPlugin swap
+          LoadPlugin users
+
+          <Plugin df>
+            FSType "ext4"
+            FSType "xfs"
+            FSType "btrfs"
+            FSType "tmpfs"
+            IgnoreSelected false
+          </Plugin>
+
+          <Plugin interface>
+            Interface "eth0"
+            Interface "ens*"
+            Interface "enp*"
+            IgnoreSelected false
+          </Plugin>
+
+          LoadPlugin network
+          <Plugin network>
+            Server "{{ baseline_collectd_server | default('localhost') }}" "{{ baseline_collectd_port | default('25826') }}"
+          </Plugin>
+        dest: /etc/collectd/collectd.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable collectd
+      systemd:
+        name: collectd
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure Netdata
+  block:
+    - name: Create netdata configuration
+      copy:
+        content: |
+          [global]
+            run as user = netdata
+            web files owner = root
+            web files group = root
+            config directory = /etc/netdata
+            log directory = /var/log/netdata
+            lib directory = /var/lib/netdata
+            cache directory = /var/cache/netdata
+            home directory = /var/lib/netdata
+            registry directory = /var/lib/netdata/registry
+            plugins directory = /usr/libexec/netdata/plugins.d
+            enable plugins from = /usr/libexec/netdata/plugins.d
+
+          [web]
+            bind to = 0.0.0.0:19999
+            port = 19999
+
+          [plugins]
+            python.d = yes
+            go.d = yes
+
+          [python.d]
+            enabled = yes
+            update every = 1
+
+          [go.d]
+            enabled = yes
+            update every = 1
+        dest: /etc/netdata/netdata.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start and enable netdata
+      systemd:
+        name: netdata
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure alerting
+  block:
+    - name: Create alerting script
+      copy:
+        content: |
+          #!/bin/bash
+          # Advanced alerting script
+          
+          ALERT_EMAIL="{{ baseline_alert_email | default('admin@localhost') }}"
+          ALERT_WEBHOOK="{{ baseline_alert_webhook | default('') }}"
+          LOG_FILE="/var/log/monitoring/alerts.log"
+          
+          # Function to send email alert
+          send_email_alert() {
+            local subject="$1"
+            local message="$2"
+            echo "$(date): $subject - $message" >> "$LOG_FILE"
+            echo "$message" | mail -s "$subject" "$ALERT_EMAIL"
+          }
+          
+          # Function to send webhook alert
+          send_webhook_alert() {
+            local message="$1"
+            if [ -n "$ALERT_WEBHOOK" ]; then
+              curl -X POST -H "Content-Type: application/json" \
+                -d "{\"text\":\"$message\"}" "$ALERT_WEBHOOK"
+            fi
+          }
+          
+          # Check CPU usage
+          CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | awk -F'%' '{print $1}')
+          if (( $(echo "$CPU_USAGE > 80" | bc -l) )); then
+            send_email_alert "High CPU Usage" "CPU usage is ${CPU_USAGE}% on $(hostname)"
+            send_webhook_alert "High CPU Usage: ${CPU_USAGE}% on $(hostname)"
+          fi
+          
+          # Check memory usage
+          MEMORY_USAGE=$(free | grep Mem | awk '{printf "%.2f", $3/$2 * 100.0}')
+          if (( $(echo "$MEMORY_USAGE > 85" | bc -l) )); then
+            send_email_alert "High Memory Usage" "Memory usage is ${MEMORY_USAGE}% on $(hostname)"
+            send_webhook_alert "High Memory Usage: ${MEMORY_USAGE}% on $(hostname)"
+          fi
+          
+          # Check disk usage
+          DISK_USAGE=$(df -h / | awk 'NR==2{print $5}' | sed 's/%//')
+          if [ "$DISK_USAGE" -gt 85 ]; then
+            send_email_alert "High Disk Usage" "Disk usage is ${DISK_USAGE}% on $(hostname)"
+            send_webhook_alert "High Disk Usage: ${DISK_USAGE}% on $(hostname)"
+          fi
+          
+          # Check for failed services
+          FAILED_SERVICES=$(systemctl --failed --no-legend | wc -l)
+          if [ "$FAILED_SERVICES" -gt 0 ]; then
+            send_email_alert "Failed Services" "$FAILED_SERVICES services have failed on $(hostname)"
+            send_webhook_alert "Failed Services: $FAILED_SERVICES services have failed on $(hostname)"
+          fi
+          
+          # Check for security events
+          FAILED_LOGINS=$(grep "Failed password" /var/log/auth.log | wc -l)
+          if [ "$FAILED_LOGINS" -gt 50 ]; then
+            send_email_alert "Security Alert" "High number of failed login attempts: $FAILED_LOGINS on $(hostname)"
+            send_webhook_alert "Security Alert: High number of failed login attempts: $FAILED_LOGINS on $(hostname)"
+          fi
+        dest: /usr/local/bin/advanced_alerting.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure alerting cron job
+      cron:
+        name: "Advanced alerting"
+        job: "/usr/local/bin/advanced_alerting.sh"
+        hour: "*/1"
+        minute: "0"
+        user: root
+
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure log aggregation
+  block:
+    - name: Install rsyslog modules
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - rsyslog-elasticsearch
+        - rsyslog-mysql
+        - rsyslog-pgsql
+        - rsyslog-mongodb
+      when: baseline_log_aggregation | default(false)
+
+    - name: Configure rsyslog for log aggregation
+      copy:
+        content: |
+          # Log aggregation configuration
+          $ModLoad imudp
+          $UDPServerRun 514
+          $ModLoad imtcp
+          $InputTCPServerRun 514
+          
+          # Forward logs to central server
+          *.* @@{{ baseline_log_server | default('localhost') }}:{{ baseline_log_port | default('514') }}
+          
+          # Local logging
+          *.info;mail.none;authpriv.none;cron.none /var/log/messages
+          authpriv.* /var/log/secure
+          mail.* /var/log/maillog
+          cron.* /var/log/cron
+          *.emerg *
+          uucp,news.crit /var/log/spooler
+          local7.* /var/log/boot.log
+        dest: /etc/rsyslog.d/99-log-aggregation.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
+        daemon_reload: yes
+
+  when: baseline_log_aggregation | default(false)
+
+- name: Create monitoring dashboard
+  block:
+    - name: Create monitoring dashboard HTML
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>System Monitoring Dashboard</title>
+              <meta http-equiv="refresh" content="30">
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 20px; }
+                  .metric { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+                  .warning { background-color: #fff3cd; }
+                  .critical { background-color: #f8d7da; }
+                  .good { background-color: #d4edda; }
+              </style>
+          </head>
+          <body>
+              <h1>System Monitoring Dashboard - {{ inventory_hostname }}</h1>
+              <div class="metric">
+                  <h3>System Information</h3>
+                  <p>Hostname: {{ inventory_hostname }}</p>
+                  <p>OS: {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+                  <p>Uptime: <span id="uptime">Loading...</span></p>
+              </div>
+              <div class="metric">
+                  <h3>CPU Usage</h3>
+                  <p>Usage: <span id="cpu">Loading...</span></p>
+              </div>
+              <div class="metric">
+                  <h3>Memory Usage</h3>
+                  <p>Usage: <span id="memory">Loading...</span></p>
+              </div>
+              <div class="metric">
+                  <h3>Disk Usage</h3>
+                  <p>Usage: <span id="disk">Loading...</span></p>
+              </div>
+              <div class="metric">
+                  <h3>Network</h3>
+                  <p>Interfaces: <span id="network">Loading...</span></p>
+              </div>
+              <script>
+                  // Simple monitoring script
+                  function updateMetrics() {
+                      fetch('/api/metrics')
+                          .then(response => response.json())
+                          .then(data => {
+                              document.getElementById('uptime').textContent = data.uptime;
+                              document.getElementById('cpu').textContent = data.cpu + '%';
+                              document.getElementById('memory').textContent = data.memory + '%';
+                              document.getElementById('disk').textContent = data.disk + '%';
+                              document.getElementById('network').textContent = data.network;
+                          });
+                  }
+                  updateMetrics();
+                  setInterval(updateMetrics, 30000);
+              </script>
+          </body>
+          </html>
+        dest: /var/www/html/monitoring.html
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create metrics API script
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import json
+          import subprocess
+          import os
+          
+          def get_uptime():
+              with open('/proc/uptime', 'r') as f:
+                  uptime_seconds = float(f.readline().split()[0])
+                  days = int(uptime_seconds // 86400)
+                  hours = int((uptime_seconds % 86400) // 3600)
+                  minutes = int((uptime_seconds % 3600) // 60)
+                  return f"{days}d {hours}h {minutes}m"
+          
+          def get_cpu_usage():
+              result = subprocess.run(['top', '-bn1'], capture_output=True, text=True)
+              for line in result.stdout.split('\n'):
+                  if 'Cpu(s)' in line:
+                      cpu_percent = float(line.split()[1].replace('%', ''))
+                      return round(cpu_percent, 1)
+              return 0
+          
+          def get_memory_usage():
+              with open('/proc/meminfo', 'r') as f:
+                  meminfo = f.read()
+              total = int([line for line in meminfo.split('\n') if 'MemTotal' in line][0].split()[1])
+              available = int([line for line in meminfo.split('\n') if 'MemAvailable' in line][0].split()[1])
+              used = total - available
+              return round((used / total) * 100, 1)
+          
+          def get_disk_usage():
+              result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True)
+              for line in result.stdout.split('\n'):
+                  if '/' in line and '%' in line:
+                      usage = int(line.split()[4].replace('%', ''))
+                      return usage
+              return 0
+          
+          def get_network_interfaces():
+              result = subprocess.run(['ip', 'link', 'show'], capture_output=True, text=True)
+              interfaces = []
+              for line in result.stdout.split('\n'):
+                  if 'state UP' in line:
+                      interface = line.split(':')[1].strip()
+                      interfaces.append(interface)
+              return ', '.join(interfaces)
+          
+          metrics = {
+              'uptime': get_uptime(),
+              'cpu': get_cpu_usage(),
+              'memory': get_memory_usage(),
+              'disk': get_disk_usage(),
+              'network': get_network_interfaces()
+          }
+          
+          print(json.dumps(metrics))
+        dest: /usr/local/bin/metrics_api.py
+        owner: root
+        group: root
+        mode: '0755'
+
+  when: baseline_advanced_monitoring | default(false)

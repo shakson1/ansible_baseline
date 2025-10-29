@@ -5,6 +5,9 @@
   include_vars: "{{ ansible_os_family | lower }}.yml"
   when: ansible_os_family in ['Debian', 'RedHat']
 
+- name: Validate configuration and system requirements
+  include_tasks: validation.yml
+
 - name: Update system packages
   include_tasks: update_system.yml
   when: baseline_update_system
@@ -37,6 +40,18 @@
 - name: Install monitoring tools
   include_tasks: install_monitoring.yml
   when: baseline_install_monitoring
+
+- name: Install advanced monitoring tools
+  include_tasks: advanced_monitoring.yml
+  when: baseline_advanced_monitoring | default(false)
+
+- name: Configure backup and recovery
+  include_tasks: backup_recovery.yml
+  when: baseline_backup_enabled | default(true)
+
+- name: Apply additional security hardening
+  include_tasks: security_hardening.yml
+  when: baseline_security_hardening | default(true)
 
 - name: Final system restart if needed
   include_tasks: final_restart.yml 

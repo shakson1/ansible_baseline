@@ -7,11 +7,15 @@ A comprehensive, production-ready Ansible role for baseline configuration and ha
 ## 🚀 Features
 
 - **System Updates**: Keeps your system packages up to date.
-- **Security Hardening**: SSH hardening, firewall, fail2ban, SELinux (RedHat).
+- **Security Hardening**: SSH hardening, firewall, fail2ban, SELinux (RedHat), AIDE, password policies.
 - **User Management**: Creates a secure admin user with SSH key and sudo access.
 - **Monitoring**: Installs and configures system, disk, and network monitoring scripts.
-- **Logging**: Enhanced rsyslog and logrotate configuration.
+- **Advanced Monitoring**: Prometheus, Grafana Agent, Telegraf, Collectd, Netdata support.
+- **Logging**: Enhanced rsyslog and logrotate configuration with log aggregation.
 - **Network Optimization**: Kernel and sysctl tuning, NTP/Chrony setup.
+- **Backup & Recovery**: Automated backup scripts with retention policies.
+- **Validation**: Comprehensive validation and error handling.
+- **Testing**: Enhanced testing capabilities with detailed reports.
 - **Idempotent**: Safe to run multiple times.
 
 ---
@@ -109,6 +113,12 @@ ansible-playbook playbook.yml --ask-vault-pass
 | baseline_configure_logging       | Configure logging                  | true                          |
 | baseline_configure_network       | Configure network                  | true                          |
 | baseline_update_system           | Update system packages             | true                          |
+| baseline_security_hardening      | Apply additional security hardening | true                          |
+| baseline_advanced_monitoring     | Install advanced monitoring tools  | false                         |
+| baseline_backup_enabled          | Enable backup functionality        | true                          |
+| baseline_log_aggregation         | Enable log aggregation            | false                         |
+| baseline_alert_email             | Email for alerts                  | admin@localhost               |
+| baseline_alert_webhook           | Webhook URL for alerts            | ""                            |
 
 See `roles/baseline/defaults/main.yml` for all options.
 
@@ -121,12 +131,21 @@ See `roles/baseline/defaults/main.yml` for all options.
 - **Fail2ban**: Protects against brute-force attacks.
 - **SELinux**: Enforced on RedHat systems.
 - **Audit Logging**: Comprehensive rules for RedHat.
+- **AIDE**: File integrity monitoring.
+- **Password Policies**: Enforced password complexity and aging.
+- **Kernel Hardening**: Security-focused kernel parameters.
+- **AppArmor**: Mandatory access control (Debian).
+- **Security Monitoring**: Automated security event detection.
 
 ---
 
 ## 📊 Monitoring & Logging
 
 - **System, Disk, Network Monitoring**: Custom scripts in `/usr/local/bin/monitoring/` with logs in `/var/log/monitoring/`.
+- **Advanced Monitoring**: Prometheus Node Exporter, Grafana Agent, Telegraf, Collectd, Netdata.
+- **Log Aggregation**: Centralized logging with rsyslog.
+- **Alerting**: Email and webhook notifications for critical events.
+- **Dashboard**: Web-based monitoring dashboard.
 - **Logrotate**: Rotates system and custom logs.
 - **Rsyslog**: Enhanced configuration for security and compliance.
 
@@ -134,11 +153,29 @@ See `roles/baseline/defaults/main.yml` for all options.
 
 ## 🧪 Testing
 
-A test playbook is provided:
+A comprehensive test playbook is provided:
 
 ```bash
+# Run full test suite
 ansible-playbook test.yml --check
+
+# Run with specific features
+ansible-playbook test.yml --check -e "baseline_security_hardening=true"
+
+# Run with advanced monitoring
+ansible-playbook test.yml --check -e "baseline_advanced_monitoring=true"
 ```
+
+### Test Features
+
+- **Configuration Validation**: Validates all configuration parameters
+- **File Permissions**: Checks critical file permissions
+- **Network Connectivity**: Tests network connectivity
+- **System Resources**: Monitors memory, disk, and CPU
+- **Configuration Syntax**: Validates SSH and rsyslog configurations
+- **Backup Scripts**: Tests backup and recovery functionality
+- **Monitoring Scripts**: Validates monitoring tools
+- **Test Reports**: Generates detailed test reports
 
 ---
 
@@ -161,6 +198,37 @@ ansible-playbook test.yml --check
       - 443
       - 8080
 ```
+
+---
+
+## 💾 Backup & Recovery
+
+### Automated Backups
+
+The role includes comprehensive backup functionality:
+
+```bash
+# Manual system backup
+/usr/local/bin/system_backup.sh
+
+# Manual configuration backup
+/usr/local/bin/config_backup.sh
+
+# System recovery
+/usr/local/bin/system_recovery.sh /var/backups/system/system_backup_20231201_020000.tar.gz
+
+# Configuration recovery
+/usr/local/bin/system_recovery.sh /var/backups/config/config_backup_20231201_030000.tar.gz config
+```
+
+### Backup Features
+
+- **System Backups**: Complete system configuration and data
+- **Configuration Backups**: SSH, firewall, logging, and service configurations
+- **Automated Scheduling**: Daily backups with cron jobs
+- **Retention Policies**: Configurable retention periods
+- **Recovery Scripts**: Easy restoration of backups
+- **Manifest Files**: Detailed backup information
 
 ---
 

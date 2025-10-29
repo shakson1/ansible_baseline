@@ -1,0 +1,322 @@
+---
+# Additional security hardening tasks
+
+- name: Install security packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - aide
+    - rkhunter
+    - chkrootkit
+    - lynis
+    - apparmor-utils
+  when: ansible_os_family == "Debian"
+
+- name: Install security packages (RedHat)
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - aide
+    - rkhunter
+    - chkrootkit
+    - lynis
+    - setroubleshoot
+  when: ansible_os_family == "RedHat"
+
+- name: Configure AIDE database
+  command: aideinit
+  args:
+    creates: /var/lib/aide/aide.db.new
+  when: ansible_os_family == "Debian"
+
+- name: Configure AIDE database (RedHat)
+  command: /usr/sbin/aide --init
+  args:
+    creates: /var/lib/aide/aide.db.new.gz
+  when: ansible_os_family == "RedHat"
+
+- name: Move AIDE database to production
+  command: "mv {{ item }} /var/lib/aide/aide.db"
+  args:
+    creates: /var/lib/aide/aide.db
+  loop:
+    - /var/lib/aide/aide.db.new
+    - /var/lib/aide/aide.db.new.gz
+  when: ansible_os_family in ['Debian', 'RedHat']
+
+- name: Configure AIDE cron job
+  cron:
+    name: "AIDE integrity check"
+    job: "/usr/bin/aide --check"
+    hour: "2"
+    minute: "0"
+    user: root
+
+- name: Configure kernel parameters for security
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { key: "kernel.dmesg_restrict", value: "1" }
+    - { key: "kernel.kptr_restrict", value: "2" }
+    - { key: "kernel.yama.ptrace_scope", value: "1" }
+    - { key: "net.ipv4.conf.all.log_martians", value: "1" }
+    - { key: "net.ipv4.conf.default.log_martians", value: "1" }
+    - { key: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.all.accept_source_route", value: "0" }
+    - { key: "net.ipv4.conf.default.accept_source_route", value: "0" }
+    - { key: "net.ipv4.conf.all.send_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.send_redirects", value: "0" }
+    - { key: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+    - { key: "net.ipv4.icmp_ignore_bogus_error_responses", value: "1" }
+    - { key: "net.ipv4.tcp_syncookies", value: "1" }
+    - { key: "net.ipv6.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv6.conf.default.accept_redirects", value: "0" }
+
+- name: Configure secure kernel parameters
+  lineinfile:
+    path: /etc/sysctl.d/99-security.conf
+    line: "{{ item }}"
+    create: yes
+  loop:
+    - "kernel.dmesg_restrict = 1"
+    - "kernel.kptr_restrict = 2"
+    - "kernel.yama.ptrace_scope = 1"
+    - "net.ipv4.conf.all.log_martians = 1"
+    - "net.ipv4.conf.default.log_martians = 1"
+    - "net.ipv4.conf.all.accept_redirects = 0"
+    - "net.ipv4.conf.default.accept_redirects = 0"
+    - "net.ipv4.conf.all.accept_source_route = 0"
+    - "net.ipv4.conf.default.accept_source_route = 0"
+    - "net.ipv4.conf.all.send_redirects = 0"
+    - "net.ipv4.conf.default.send_redirects = 0"
+    - "net.ipv4.icmp_echo_ignore_broadcasts = 1"
+    - "net.ipv4.icmp_ignore_bogus_error_responses = 1"
+    - "net.ipv4.tcp_syncookies = 1"
+    - "net.ipv6.conf.all.accept_redirects = 0"
+    - "net.ipv6.conf.default.accept_redirects = 0"
+
+- name: Configure AppArmor (Debian)
+  block:
+    - name: Start and enable AppArmor
+      service:
+        name: apparmor
+        state: started
+        enabled: yes
+
+    - name: Set AppArmor to enforcing mode
+      command: aa-enforce /etc/apparmor.d/*
+      when: ansible_check_mode is not defined
+
+  when: ansible_os_family == "Debian"
+
+- name: Configure SELinux (RedHat)
+  block:
+    - name: Install SELinux utilities
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - policycoreutils
+        - policycoreutils-python-utils
+        - setools-console
+
+    - name: Set SELinux to enforcing mode
+      selinux:
+        policy: "{{ baseline_selinux_policy }}"
+        state: "{{ baseline_selinux_state }}"
+
+    - name: Start and enable auditd
+      service:
+        name: auditd
+        state: started
+        enabled: yes
+
+  when: ansible_os_family == "RedHat"
+
+- name: Configure automatic security updates (Debian)
+  block:
+    - name: Install unattended-upgrades
+      package:
+        name: unattended-upgrades
+        state: present
+
+    - name: Configure automatic security updates
+      copy:
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+          Unattended-Upgrade::Automatic-Reboot "false";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+  when: ansible_os_family == "Debian"
+
+- name: Configure automatic security updates (RedHat)
+  block:
+    - name: Install dnf-automatic
+      package:
+        name: dnf-automatic
+        state: present
+
+    - name: Configure dnf-automatic
+      lineinfile:
+        path: /etc/dnf/automatic.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - { regexp: "^upgrade_type =", line: "upgrade_type = security" }
+        - { regexp: "^download_updates =", line: "download_updates = yes" }
+        - { regexp: "^apply_updates =", line: "apply_updates = yes" }
+        - { regexp: "^random_sleep =", line: "random_sleep = 0" }
+
+    - name: Start and enable dnf-automatic
+      service:
+        name: dnf-automatic.timer
+        state: started
+        enabled: yes
+
+  when: ansible_os_family == "RedHat"
+
+- name: Configure password policies
+  block:
+    - name: Install libpam-pwquality (Debian)
+      package:
+        name: libpam-pwquality
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install libpwquality (RedHat)
+      package:
+        name: libpwquality
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Configure password quality
+      lineinfile:
+        path: "{{ item }}"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - { path: "/etc/security/pwquality.conf", regexp: "^minlen =", line: "minlen = 12" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^dcredit =", line: "dcredit = -1" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^ucredit =", line: "ucredit = -1" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^lcredit =", line: "lcredit = -1" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^ocredit =", line: "ocredit = -1" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^minclass =", line: "minclass = 3" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^maxrepeat =", line: "maxrepeat = 2" }
+        - { path: "/etc/security/pwquality.conf", regexp: "^maxclassrepeat =", line: "maxclassrepeat = 2" }
+
+    - name: Configure password aging
+      lineinfile:
+        path: /etc/login.defs
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      loop:
+        - { regexp: "^PASS_MAX_DAYS", line: "PASS_MAX_DAYS 90" }
+        - { regexp: "^PASS_MIN_DAYS", line: "PASS_MIN_DAYS 7" }
+        - { regexp: "^PASS_WARN_AGE", line: "PASS_WARN_AGE 7" }
+        - { regexp: "^PASS_MIN_LEN", line: "PASS_MIN_LEN 12" }
+
+- name: Configure file permissions
+  block:
+    - name: Secure /etc/passwd
+      file:
+        path: /etc/passwd
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Secure /etc/shadow
+      file:
+        path: /etc/shadow
+        mode: '0640'
+        owner: root
+        group: shadow
+
+    - name: Secure /etc/group
+      file:
+        path: /etc/group
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Secure /etc/gshadow
+      file:
+        path: /etc/gshadow
+        mode: '0640'
+        owner: root
+        group: shadow
+
+    - name: Secure /etc/sudoers
+      file:
+        path: /etc/sudoers
+        mode: '0440'
+        owner: root
+        group: root
+
+- name: Disable unnecessary services
+  service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop:
+    - rpcbind
+    - nfs-common
+    - nfs-kernel-server
+    - rpc-statd
+    - rpcbind
+    - rpc-statd
+    - rpcbind
+    - rpc-statd
+  ignore_errors: true
+
+- name: Configure log monitoring
+  block:
+    - name: Create log monitoring script
+      copy:
+        content: |
+          #!/bin/bash
+          # Log monitoring script
+          LOG_DIR="/var/log"
+          ALERT_EMAIL="{{ baseline_alert_email | default('admin@localhost') }}"
+          
+          # Check for failed login attempts
+          FAILED_LOGINS=$(grep "Failed password" $LOG_DIR/auth.log | wc -l)
+          if [ $FAILED_LOGINS -gt 10 ]; then
+            echo "High number of failed login attempts: $FAILED_LOGINS" | mail -s "Security Alert" $ALERT_EMAIL
+          fi
+          
+          # Check for root login attempts
+          ROOT_LOGINS=$(grep "root" $LOG_DIR/auth.log | grep "Accepted" | wc -l)
+          if [ $ROOT_LOGINS -gt 0 ]; then
+            echo "Root login detected: $ROOT_LOGINS" | mail -s "Security Alert" $ALERT_EMAIL
+          fi
+        dest: /usr/local/bin/log_monitor.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure log monitoring cron job
+      cron:
+        name: "Log monitoring"
+        job: "/usr/local/bin/log_monitor.sh"
+        hour: "*/1"
+        minute: "0"
+        user: root
+
+  when: baseline_configure_logging | default(true)

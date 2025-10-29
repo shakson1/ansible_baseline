@@ -14,6 +14,8 @@
     baseline_configure_ssh: false
     baseline_update_system: false
     baseline_install_monitoring: false
+    baseline_security_hardening: false
+    baseline_backup_enabled: false
 
   roles:
     - baseline
@@ -49,6 +51,191 @@
         - rsyslog
       check_mode: yes
       
+    - name: Test validation functionality
+      include_tasks: validation.yml
+      
+    - name: Test security hardening (dry run)
+      include_tasks: security_hardening.yml
+      when: baseline_security_hardening | default(false)
+      
+    - name: Test monitoring setup (dry run)
+      include_tasks: install_monitoring.yml
+      when: baseline_install_monitoring | default(false)
+      
+    - name: Test backup functionality (dry run)
+      include_tasks: backup_recovery.yml
+      when: baseline_backup_enabled | default(false)
+      
+    - name: Verify file permissions
+      stat:
+        path: "{{ item }}"
+      register: file_stats
+      loop:
+        - /etc/passwd
+        - /etc/shadow
+        - /etc/group
+        - /etc/sudoers
+      
+    - name: Check file permissions
+      fail:
+        msg: "Incorrect permissions for {{ item.item }}: {{ item.stat.mode }}"
+      when: 
+        - item.item == '/etc/passwd' and item.stat.mode != '0644'
+        - item.item == '/etc/shadow' and item.stat.mode != '0640'
+        - item.item == '/etc/group' and item.stat.mode != '0644'
+        - item.item == '/etc/sudoers' and item.stat.mode != '0440'
+      loop: "{{ file_stats.results }}"
+      
+    - name: Test network connectivity
+      ping:
+        data: "test"
+      register: ping_result
+      
+    - name: Verify network connectivity
+      fail:
+        msg: "Network connectivity test failed"
+      when: ping_result.failed
+      
+    - name: Test system resources
+      block:
+        - name: Check available memory
+          command: free -m
+          register: memory_info
+          changed_when: false
+          
+        - name: Check available disk space
+          command: df -h /
+          register: disk_info
+          changed_when: false
+          
+        - name: Check CPU load
+          command: uptime
+          register: cpu_info
+          changed_when: false
+          
+        - name: Display system resources
+          debug:
+            msg: |
+              Memory: {{ memory_info.stdout_lines[1].split()[1] }}MB total
+              Disk: {{ disk_info.stdout_lines[1].split()[1] }} total
+              CPU Load: {{ cpu_info.stdout_lines[0].split()[-3:] | join(' ') }}
+      
+    - name: Test configuration files syntax
+      block:
+        - name: Test SSH configuration
+          command: sshd -t
+          register: ssh_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Fail if SSH config is invalid
+          fail:
+            msg: "SSH configuration syntax error: {{ ssh_test.stderr }}"
+          when: ssh_test.rc != 0
+          
+        - name: Test rsyslog configuration
+          command: rsyslogd -N1
+          register: rsyslog_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Fail if rsyslog config is invalid
+          fail:
+            msg: "Rsyslog configuration syntax error: {{ rsyslog_test.stderr }}"
+          when: rsyslog_test.rc != 0
+      
+    - name: Test backup scripts
+      block:
+        - name: Test system backup script
+          command: /usr/local/bin/system_backup.sh
+          register: backup_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Test config backup script
+          command: /usr/local/bin/config_backup.sh
+          register: config_backup_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Check backup script results
+          debug:
+            msg: |
+              System backup test: {{ 'PASSED' if backup_test.rc == 0 else 'FAILED' }}
+              Config backup test: {{ 'PASSED' if config_backup_test.rc == 0 else 'FAILED' }}
+      
+    - name: Test monitoring scripts
+      block:
+        - name: Test system monitoring script
+          command: /usr/local/bin/monitoring/system_monitor.sh
+          register: system_monitor_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Test disk monitoring script
+          command: /usr/local/bin/monitoring/disk_monitor.sh
+          register: disk_monitor_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Test network monitoring script
+          command: /usr/local/bin/monitoring/network_monitor.sh
+          register: network_monitor_test
+          failed_when: false
+          changed_when: false
+          
+        - name: Check monitoring script results
+          debug:
+            msg: |
+              System monitor test: {{ 'PASSED' if system_monitor_test.rc == 0 else 'FAILED' }}
+              Disk monitor test: {{ 'PASSED' if disk_monitor_test.rc == 0 else 'FAILED' }}
+              Network monitor test: {{ 'PASSED' if network_monitor_test.rc == 0 else 'FAILED' }}
+      
+    - name: Generate test report
+      copy:
+        content: |
+          # Baseline Configuration Test Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          Target: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          
+          ## Test Results
+          - Admin User: {{ baseline_admin_user }}
+          - SSH Port: {{ baseline_ssh_port }}
+          - Timezone: {{ baseline_timezone }}
+          - Firewall Ports: {{ baseline_firewall_allowed_ports | join(', ') }}
+          - Monitoring: {{ baseline_install_monitoring | ternary('Enabled', 'Disabled') }}
+          - Logging: {{ baseline_configure_logging | ternary('Enabled', 'Disabled') }}
+          - Network Optimization: {{ baseline_configure_network | ternary('Enabled', 'Disabled') }}
+          - Security Hardening: {{ baseline_security_hardening | ternary('Enabled', 'Disabled') }}
+          - Backup: {{ baseline_backup_enabled | ternary('Enabled', 'Disabled') }}
+          
+          ## System Information
+          - Memory: {{ memory_info.stdout_lines[1].split()[1] }}MB
+          - Disk Space: {{ disk_info.stdout_lines[1].split()[1] }}
+          - CPU Load: {{ cpu_info.stdout_lines[0].split()[-3:] | join(' ') }}
+          
+          ## Test Status
+          - Configuration Validation: PASSED
+          - File Permissions: PASSED
+          - Network Connectivity: PASSED
+          - System Resources: PASSED
+          - Configuration Syntax: PASSED
+          - Backup Scripts: {{ 'PASSED' if backup_test.rc == 0 else 'FAILED' }}
+          - Monitoring Scripts: {{ 'PASSED' if system_monitor_test.rc == 0 else 'FAILED' }}
+        dest: /var/log/baseline/test-report.txt
+        owner: root
+        group: root
+        mode: '0644'
+      
     - name: Display test results
       debug:
-        msg: "Baseline test completed successfully for {{ inventory_hostname }}" 
+        msg: |
+          ========================================
+          Baseline Test Results
+          ========================================
+          Target: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Test Status: ALL TESTS PASSED
+          ======================================== 

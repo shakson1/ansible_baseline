@@ -1,0 +1,257 @@
+---
+# Validation and error handling tasks
+
+- name: Validate required variables
+  fail:
+    msg: "{{ item }}"
+  when: "{{ item.var | default('') | length == 0 }}"
+  loop:
+    - { var: "{{ baseline_admin_user }}", msg: "baseline_admin_user is required" }
+    - { var: "{{ baseline_admin_password }}", msg: "baseline_admin_password is required" }
+
+- name: Validate SSH key format
+  fail:
+    msg: "Invalid SSH key format. Expected format: ssh-rsa, ssh-ed25519, etc."
+  when: 
+    - baseline_ssh_key | length > 0
+    - not (baseline_ssh_key is match('^ssh-(rsa|ed25519|ecdsa)'))
+
+- name: Validate timezone
+  command: timedatectl list-timezones
+  register: available_timezones
+  failed_when: false
+  changed_when: false
+
+- name: Check if timezone is valid
+  fail:
+    msg: "Invalid timezone: {{ baseline_timezone }}. Use 'timedatectl list-timezones' to see available options."
+  when: 
+    - baseline_timezone not in available_timezones.stdout_lines
+    - baseline_timezone != 'UTC'
+
+- name: Validate SSH port
+  fail:
+    msg: "SSH port must be between 1 and 65535"
+  when: 
+    - baseline_ssh_port < 1
+    - baseline_ssh_port > 65535
+
+- name: Validate firewall ports
+  fail:
+    msg: "Firewall port {{ item }} must be between 1 and 65535"
+  when: 
+    - item < 1
+    - item > 65535
+  loop: "{{ baseline_firewall_allowed_ports }}"
+
+- name: Check system requirements
+  block:
+    - name: Check available disk space
+      command: df -h /
+      register: disk_usage
+      changed_when: false
+
+    - name: Fail if insufficient disk space
+      fail:
+        msg: "Insufficient disk space. At least 2GB required, found {{ (disk_usage.stdout_lines[1].split()[3] | regex_replace('G', '') | int) }}GB"
+      when: (disk_usage.stdout_lines[1].split()[3] | regex_replace('G', '') | int) < 2
+
+    - name: Check available memory
+      command: free -m
+      register: memory_usage
+      changed_when: false
+
+    - name: Fail if insufficient memory
+      fail:
+        msg: "Insufficient memory. At least 1GB required, found {{ (memory_usage.stdout_lines[1].split()[1] | int / 1024) }}GB"
+      when: (memory_usage.stdout_lines[1].split()[1] | int / 1024) < 1
+
+- name: Validate package repositories
+  block:
+    - name: Check Debian repositories
+      command: apt update
+      register: apt_update
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "Debian"
+
+    - name: Fail if Debian repositories are not accessible
+      fail:
+        msg: "Cannot access Debian package repositories. Check network connectivity and repository configuration."
+      when: 
+        - ansible_os_family == "Debian"
+        - apt_update.rc != 0
+
+    - name: Check RedHat repositories
+      command: dnf check-update
+      register: dnf_check
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    - name: Fail if RedHat repositories are not accessible
+      fail:
+        msg: "Cannot access RedHat package repositories. Check network connectivity and repository configuration."
+      when: 
+        - ansible_os_family == "RedHat"
+        - dnf_check.rc != 0
+
+- name: Check for conflicting services
+  block:
+    - name: Check if SSH is already running
+      service:
+        name: "{{ baseline_ssh_service }}"
+      register: ssh_status
+      failed_when: false
+
+    - name: Check if firewall is already configured
+      command: "{{ 'ufw status' if ansible_os_family == 'Debian' else 'firewall-cmd --state' }}"
+      register: firewall_status
+      failed_when: false
+      changed_when: false
+
+    - name: Warn about existing SSH configuration
+      debug:
+        msg: "SSH service is already running. Configuration will be updated."
+      when: ssh_status.status is defined and ssh_status.status.ActiveState == "active"
+
+    - name: Warn about existing firewall configuration
+      debug:
+        msg: "Firewall is already configured. Rules will be updated."
+      when: firewall_status.rc == 0
+
+- name: Validate network connectivity
+  block:
+    - name: Test DNS resolution
+      command: nslookup google.com
+      register: dns_test
+      failed_when: false
+      changed_when: false
+
+    - name: Test internet connectivity
+      command: ping -c 1 8.8.8.8
+      register: ping_test
+      failed_when: false
+      changed_when: false
+
+    - name: Warn about DNS issues
+      debug:
+        msg: "DNS resolution failed. Some features may not work properly."
+      when: dns_test.rc != 0
+
+    - name: Warn about connectivity issues
+      debug:
+        msg: "Internet connectivity test failed. Some features may not work properly."
+      when: ping_test.rc != 0
+
+- name: Check for existing admin user
+  block:
+    - name: Check if admin user already exists
+      user:
+        name: "{{ baseline_admin_user }}"
+      register: admin_user_check
+      failed_when: false
+
+    - name: Warn about existing admin user
+      debug:
+        msg: "Admin user '{{ baseline_admin_user }}' already exists. User configuration will be updated."
+      when: admin_user_check.state == "present"
+
+- name: Validate system architecture
+  fail:
+    msg: "Unsupported architecture: {{ ansible_architecture }}. Supported architectures: x86_64, amd64, aarch64, arm64"
+  when: ansible_architecture not in ['x86_64', 'amd64', 'aarch64', 'arm64']
+
+- name: Check for required Python modules
+  block:
+    - name: Check Python version
+      command: python3 --version
+      register: python_version
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Python 3 is not available
+      fail:
+        msg: "Python 3 is required but not found. Please install Python 3."
+      when: python_version.rc != 0
+
+    - name: Check for required Python modules
+      pip:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - paramiko
+        - pyyaml
+      failed_when: false
+      register: pip_install
+
+    - name: Warn about missing Python modules
+      debug:
+        msg: "Some Python modules are missing. Installing them now."
+      when: pip_install.failed
+
+- name: Validate configuration files
+  block:
+    - name: Check SSH configuration syntax
+      command: sshd -t
+      register: ssh_config_test
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if SSH configuration is invalid
+      fail:
+        msg: "SSH configuration syntax error: {{ ssh_config_test.stderr }}"
+      when: ssh_config_test.rc != 0
+
+- name: Create validation report
+  block:
+    - name: Generate validation report
+      copy:
+        content: |
+          # Baseline Configuration Validation Report
+          Generated: {{ ansible_date_time.iso8601 }}
+          Target: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          
+          ## Validation Results
+          - Admin User: {{ baseline_admin_user }}
+          - SSH Port: {{ baseline_ssh_port }}
+          - Timezone: {{ baseline_timezone }}
+          - Firewall Ports: {{ baseline_firewall_allowed_ports | join(', ') }}
+          - Monitoring: {{ baseline_install_monitoring | ternary('Enabled', 'Disabled') }}
+          - Logging: {{ baseline_configure_logging | ternary('Enabled', 'Disabled') }}
+          - Network Optimization: {{ baseline_configure_network | ternary('Enabled', 'Disabled') }}
+          
+          ## System Information
+          - Memory: {{ ansible_memtotal_mb }}MB
+          - Disk Space: {{ ansible_mounts[0].size_available | int // 1024 // 1024 // 1024 }}GB
+          - CPU Cores: {{ ansible_processor_vcpus }}
+          
+          ## Warnings
+          {% if ssh_status is defined and ssh_status.status.ActiveState == "active" %}
+          - SSH service is already running
+          {% endif %}
+          {% if firewall_status is defined and firewall_status.rc == 0 %}
+          - Firewall is already configured
+          {% endif %}
+          {% if admin_user_check is defined and admin_user_check.state == "present" %}
+          - Admin user already exists
+          {% endif %}
+        dest: /var/log/baseline/validation-report.txt
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Display validation summary
+      debug:
+        msg: |
+          ========================================
+          Baseline Configuration Validation
+          ========================================
+          Target: {{ inventory_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Admin User: {{ baseline_admin_user }}
+          SSH Port: {{ baseline_ssh_port }}
+          Timezone: {{ baseline_timezone }}
+          ========================================

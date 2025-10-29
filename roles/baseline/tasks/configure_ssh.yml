@@ -85,6 +85,72 @@
     line: "LoginGraceTime 60"
     state: present
 
+- name: Disable empty passwords
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?PermitEmptyPasswords "
+    line: "PermitEmptyPasswords no"
+    state: present
+
+- name: Disable user environment
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?PermitUserEnvironment "
+    line: "PermitUserEnvironment no"
+    state: present
+
+- name: Disable TCP keepalive
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?TCPKeepAlive "
+    line: "TCPKeepAlive no"
+    state: present
+
+- name: Configure compression
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?Compression "
+    line: "Compression no"
+    state: present
+
+- name: Disable gateway ports
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?GatewayPorts "
+    line: "GatewayPorts no"
+    state: present
+
+- name: Configure strict modes
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?StrictModes "
+    line: "StrictModes yes"
+    state: present
+
+- name: Disable user host key checking
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?StrictHostKeyChecking "
+    line: "StrictHostKeyChecking yes"
+    state: present
+
+- name: Configure banner
+  lineinfile:
+    path: "{{ baseline_ssh_config }}"
+    regexp: "^#?Banner "
+    line: "Banner /etc/ssh/banner"
+    state: present
+
+- name: Create SSH banner
+  copy:
+    content: |
+      WARNING: Unauthorized access to this system is forbidden and will be prosecuted by law.
+      By accessing this system, you agree that your actions may be monitored and recorded.
+    dest: /etc/ssh/banner
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Restart SSH service
   service:
     name: "{{ baseline_ssh_service }}"

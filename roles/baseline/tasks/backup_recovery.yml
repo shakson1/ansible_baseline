@@ -1,0 +1,311 @@
+---
+# Backup and recovery tasks
+
+- name: Install backup packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - rsync
+    - tar
+    - gzip
+    - bzip2
+    - duplicity
+    - rdiff-backup
+
+- name: Create backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ baseline_backup_dir | default('/var/backups') }}"
+    - "{{ baseline_backup_dir | default('/var/backups') }}/system"
+    - "{{ baseline_backup_dir | default('/var/backups') }}/config"
+    - "{{ baseline_backup_dir | default('/var/backups') }}/data"
+    - "{{ baseline_backup_dir | default('/var/backups') }}/logs"
+
+- name: Create system backup script
+  copy:
+    content: |
+      #!/bin/bash
+      # System backup script
+      
+      BACKUP_DIR="{{ baseline_backup_dir | default('/var/backups') }}"
+      DATE=$(date +%Y%m%d_%H%M%S)
+      BACKUP_NAME="system_backup_${DATE}"
+      
+      # Create backup directory
+      mkdir -p "$BACKUP_DIR/system/$BACKUP_NAME"
+      
+      # Backup system configuration
+      tar -czf "$BACKUP_DIR/system/$BACKUP_NAME/etc.tar.gz" /etc/
+      
+      # Backup user data
+      tar -czf "$BACKUP_DIR/system/$BACKUP_NAME/home.tar.gz" /home/
+      
+      # Backup log files
+      tar -czf "$BACKUP_DIR/system/$BACKUP_NAME/logs.tar.gz" /var/log/
+      
+      # Backup installed packages list
+      if command -v dpkg >/dev/null 2>&1; then
+          dpkg --get-selections > "$BACKUP_DIR/system/$BACKUP_NAME/packages.txt"
+      elif command -v rpm >/dev/null 2>&1; then
+          rpm -qa > "$BACKUP_DIR/system/$BACKUP_NAME/packages.txt"
+      fi
+      
+      # Create backup manifest
+      cat > "$BACKUP_DIR/system/$BACKUP_NAME/manifest.txt" << EOF
+      Backup Date: $(date)
+      Hostname: $(hostname)
+      OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)
+      Kernel: $(uname -r)
+      Architecture: $(uname -m)
+      Backup Type: System
+      EOF
+      
+      # Compress the entire backup
+      tar -czf "$BACKUP_DIR/system/${BACKUP_NAME}.tar.gz" -C "$BACKUP_DIR/system" "$BACKUP_NAME"
+      rm -rf "$BACKUP_DIR/system/$BACKUP_NAME"
+      
+      # Remove old backups (keep last 7 days)
+      find "$BACKUP_DIR/system" -name "system_backup_*.tar.gz" -mtime +7 -delete
+      
+      echo "System backup completed: ${BACKUP_NAME}.tar.gz"
+    dest: /usr/local/bin/system_backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create configuration backup script
+  copy:
+    content: |
+      #!/bin/bash
+      # Configuration backup script
+      
+      BACKUP_DIR="{{ baseline_backup_dir | default('/var/backups') }}"
+      DATE=$(date +%Y%m%d_%H%M%S)
+      BACKUP_NAME="config_backup_${DATE}"
+      
+      # Create backup directory
+      mkdir -p "$BACKUP_DIR/config/$BACKUP_NAME"
+      
+      # Backup SSH configuration
+      cp -r /etc/ssh "$BACKUP_DIR/config/$BACKUP_NAME/"
+      
+      # Backup firewall configuration
+      if [ -d /etc/ufw ]; then
+          cp -r /etc/ufw "$BACKUP_DIR/config/$BACKUP_NAME/"
+      fi
+      if [ -d /etc/firewalld ]; then
+          cp -r /etc/firewalld "$BACKUP_DIR/config/$BACKUP_NAME/"
+      fi
+      
+      # Backup fail2ban configuration
+      if [ -d /etc/fail2ban ]; then
+          cp -r /etc/fail2ban "$BACKUP_DIR/config/$BACKUP_NAME/"
+      fi
+      
+      # Backup rsyslog configuration
+      if [ -f /etc/rsyslog.conf ]; then
+          cp /etc/rsyslog.conf "$BACKUP_DIR/config/$BACKUP_NAME/"
+      fi
+      
+      # Backup cron jobs
+      crontab -l > "$BACKUP_DIR/config/$BACKUP_NAME/crontab.txt" 2>/dev/null || true
+      
+      # Backup systemd services
+      systemctl list-unit-files --type=service > "$BACKUP_DIR/config/$BACKUP_NAME/services.txt"
+      
+      # Create backup manifest
+      cat > "$BACKUP_DIR/config/$BACKUP_NAME/manifest.txt" << EOF
+      Backup Date: $(date)
+      Hostname: $(hostname)
+      Backup Type: Configuration
+      EOF
+      
+      # Compress the backup
+      tar -czf "$BACKUP_DIR/config/${BACKUP_NAME}.tar.gz" -C "$BACKUP_DIR/config" "$BACKUP_NAME"
+      rm -rf "$BACKUP_DIR/config/$BACKUP_NAME"
+      
+      # Remove old backups (keep last 30 days)
+      find "$BACKUP_DIR/config" -name "config_backup_*.tar.gz" -mtime +30 -delete
+      
+      echo "Configuration backup completed: ${BACKUP_NAME}.tar.gz"
+    dest: /usr/local/bin/config_backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create recovery script
+  copy:
+    content: |
+      #!/bin/bash
+      # System recovery script
+      
+      BACKUP_DIR="{{ baseline_backup_dir | default('/var/backups') }}"
+      
+      if [ $# -eq 0 ]; then
+          echo "Usage: $0 <backup_file> [restore_type]"
+          echo "Available backups:"
+          ls -la "$BACKUP_DIR/system/"*.tar.gz 2>/dev/null || echo "No system backups found"
+          ls -la "$BACKUP_DIR/config/"*.tar.gz 2>/dev/null || echo "No config backups found"
+          exit 1
+      fi
+      
+      BACKUP_FILE="$1"
+      RESTORE_TYPE="${2:-system}"
+      
+      if [ ! -f "$BACKUP_FILE" ]; then
+          echo "Error: Backup file '$BACKUP_FILE' not found"
+          exit 1
+      fi
+      
+      echo "Starting recovery from: $BACKUP_FILE"
+      echo "Restore type: $RESTORE_TYPE"
+      
+      # Create temporary directory
+      TEMP_DIR=$(mktemp -d)
+      
+      # Extract backup
+      tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
+      
+      if [ "$RESTORE_TYPE" = "system" ]; then
+          echo "Restoring system files..."
+          
+          # Restore /etc
+          if [ -f "$TEMP_DIR/etc.tar.gz" ]; then
+              echo "Restoring /etc directory..."
+              tar -xzf "$TEMP_DIR/etc.tar.gz" -C /
+          fi
+          
+          # Restore /home
+          if [ -f "$TEMP_DIR/home.tar.gz" ]; then
+              echo "Restoring /home directory..."
+              tar -xzf "$TEMP_DIR/home.tar.gz" -C /
+          fi
+          
+          # Restore logs
+          if [ -f "$TEMP_DIR/logs.tar.gz" ]; then
+              echo "Restoring log files..."
+              tar -xzf "$TEMP_DIR/logs.tar.gz" -C /
+          fi
+          
+          # Restore packages
+          if [ -f "$TEMP_DIR/packages.txt" ]; then
+              echo "Restoring packages..."
+              if command -v dpkg >/dev/null 2>&1; then
+                  dpkg --set-selections < "$TEMP_DIR/packages.txt"
+                  apt-get dselect-upgrade -y
+              elif command -v rpm >/dev/null 2>&1; then
+                  while read package; do
+                      yum install -y "$package"
+                  done < "$TEMP_DIR/packages.txt"
+              fi
+          fi
+          
+      elif [ "$RESTORE_TYPE" = "config" ]; then
+          echo "Restoring configuration files..."
+          
+          # Restore SSH configuration
+          if [ -d "$TEMP_DIR/ssh" ]; then
+              echo "Restoring SSH configuration..."
+              cp -r "$TEMP_DIR/ssh" /etc/
+              systemctl restart ssh
+          fi
+          
+          # Restore firewall configuration
+          if [ -d "$TEMP_DIR/ufw" ]; then
+              echo "Restoring UFW configuration..."
+              cp -r "$TEMP_DIR/ufw" /etc/
+              ufw reload
+          fi
+          
+          if [ -d "$TEMP_DIR/firewalld" ]; then
+              echo "Restoring firewalld configuration..."
+              cp -r "$TEMP_DIR/firewalld" /etc/
+              systemctl restart firewalld
+          fi
+          
+          # Restore fail2ban configuration
+          if [ -d "$TEMP_DIR/fail2ban" ]; then
+              echo "Restoring fail2ban configuration..."
+              cp -r "$TEMP_DIR/fail2ban" /etc/
+              systemctl restart fail2ban
+          fi
+          
+          # Restore rsyslog configuration
+          if [ -f "$TEMP_DIR/rsyslog.conf" ]; then
+              echo "Restoring rsyslog configuration..."
+              cp "$TEMP_DIR/rsyslog.conf" /etc/
+              systemctl restart rsyslog
+          fi
+          
+          # Restore cron jobs
+          if [ -f "$TEMP_DIR/crontab.txt" ]; then
+              echo "Restoring cron jobs..."
+              crontab "$TEMP_DIR/crontab.txt"
+          fi
+      fi
+      
+      # Cleanup
+      rm -rf "$TEMP_DIR"
+      
+      echo "Recovery completed successfully"
+    dest: /usr/local/bin/system_recovery.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure backup cron jobs
+  cron:
+    name: "{{ item.name }}"
+    job: "{{ item.job }}"
+    hour: "{{ item.hour }}"
+    minute: "{{ item.minute }}"
+    user: root
+  loop:
+    - name: "System backup"
+      job: "/usr/local/bin/system_backup.sh"
+      hour: "2"
+      minute: "0"
+    - name: "Configuration backup"
+      job: "/usr/local/bin/config_backup.sh"
+      hour: "3"
+      minute: "0"
+
+- name: Configure backup retention
+  copy:
+    content: |
+      #!/bin/bash
+      # Backup retention script
+      
+      BACKUP_DIR="{{ baseline_backup_dir | default('/var/backups') }}"
+      
+      # Remove system backups older than 7 days
+      find "$BACKUP_DIR/system" -name "system_backup_*.tar.gz" -mtime +7 -delete
+      
+      # Remove config backups older than 30 days
+      find "$BACKUP_DIR/config" -name "config_backup_*.tar.gz" -mtime +30 -delete
+      
+      # Remove data backups older than 90 days
+      find "$BACKUP_DIR/data" -name "data_backup_*.tar.gz" -mtime +90 -delete
+      
+      # Remove log backups older than 14 days
+      find "$BACKUP_DIR/logs" -name "log_backup_*.tar.gz" -mtime +14 -delete
+      
+      echo "Backup retention cleanup completed"
+    dest: /usr/local/bin/backup_retention.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure backup retention cron job
+  cron:
+    name: "Backup retention cleanup"
+    job: "/usr/local/bin/backup_retention.sh"
+    hour: "4"
+    minute: "0"
+    user: root

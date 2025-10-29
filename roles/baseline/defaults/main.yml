@@ -16,6 +16,10 @@ baseline_configure_ssh: true
 baseline_configure_logging: true
 baseline_configure_network: true
 baseline_update_system: true
+baseline_security_hardening: true
+baseline_advanced_monitoring: false
+baseline_backup_enabled: true
+baseline_log_aggregation: false
 
 # SSH configuration
 baseline_ssh_port: 22
@@ -88,4 +92,21 @@ baseline_network_optimizations:
   - net.ipv4.tcp_wmem: "4096 65536 16777216"
   - net.ipv4.tcp_congestion_control: bbr
   - net.core.netdev_max_backlog: 5000
-  - net.ipv4.tcp_max_syn_backlog: 4096 
+  - net.ipv4.tcp_max_syn_backlog: 4096
+
+# Backup configuration
+baseline_backup_dir: /var/backups
+baseline_alert_email: admin@localhost
+baseline_alert_webhook: ""
+
+# Advanced monitoring configuration
+baseline_grafana_agent_remote_write_url: "http://localhost:9090/api/v1/write"
+baseline_grafana_agent_logs_url: "http://localhost:3100/loki/api/v1/push"
+baseline_telegraf_influxdb_url: "http://localhost:8086"
+baseline_telegraf_database: "telegraf"
+baseline_telegraf_username: "telegraf"
+baseline_telegraf_password: "password"
+baseline_collectd_server: "localhost"
+baseline_collectd_port: "25826"
+baseline_log_server: "localhost"
+baseline_log_port: "514" 
