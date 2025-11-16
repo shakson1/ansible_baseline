@@ -4,54 +4,103 @@
 - name: Include OS-specific variables
   include_vars: "{{ ansible_os_family | lower }}.yml"
   when: ansible_os_family in ['Debian', 'RedHat']
+  tags:
+    - always
+    - setup
 
 - name: Validate configuration and system requirements
   include_tasks: validation.yml
+  tags:
+    - always
+    - validation
+    - check
 
 - name: Update system packages
   include_tasks: update_system.yml
   when: baseline_update_system
+  tags:
+    - packages
+    - update
+    - system
 
 - name: Install essential packages
   include_tasks: install_packages.yml
+  tags:
+    - packages
+    - install
 
 - name: Configure system settings
   include_tasks: configure_system.yml
+  tags:
+    - system
+    - configuration
 
 - name: Create admin user
   include_tasks: user_management.yml
+  tags:
+    - users
+    - security
 
 - name: Configure SSH server
   include_tasks: configure_ssh.yml
   when: baseline_configure_ssh
+  tags:
+    - ssh
+    - security
 
 - name: Configure firewall
   include_tasks: configure_firewall.yml
   when: baseline_configure_firewall
+  tags:
+    - firewall
+    - security
 
 - name: Configure logging
   include_tasks: configure_logging.yml
   when: baseline_configure_logging
+  tags:
+    - logging
+    - monitoring
 
 - name: Configure network optimizations
   include_tasks: configure_network.yml
   when: baseline_configure_network
+  tags:
+    - network
+    - optimization
 
 - name: Install monitoring tools
   include_tasks: install_monitoring.yml
   when: baseline_install_monitoring
+  tags:
+    - monitoring
+    - tools
 
 - name: Install advanced monitoring tools
   include_tasks: advanced_monitoring.yml
   when: baseline_advanced_monitoring | default(false)
+  tags:
+    - monitoring
+    - advanced
+    - prometheus
+    - grafana
 
 - name: Configure backup and recovery
   include_tasks: backup_recovery.yml
   when: baseline_backup_enabled | default(true)
+  tags:
+    - backup
+    - recovery
 
 - name: Apply additional security hardening
   include_tasks: security_hardening.yml
   when: baseline_security_hardening | default(true)
+  tags:
+    - security
+    - hardening
 
 - name: Final system restart if needed
-  include_tasks: final_restart.yml 
+  include_tasks: final_restart.yml
+  tags:
+    - restart
+    - reboot 

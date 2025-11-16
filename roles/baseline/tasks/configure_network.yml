@@ -54,19 +54,31 @@
   loop: "{{ baseline_network_optimizations }}"
 
 - name: Configure DNS resolvers
-  template:
-    src: resolv.conf.j2
-    dest: /etc/resolv.conf
-    owner: root
-    group: root
-    mode: '0644'
-  when: baseline_dns_servers is defined
+  block:
+    - name: Backup existing resolv.conf
+      copy:
+        src: /etc/resolv.conf
+        dest: /etc/resolv.conf.backup
+        remote_src: yes
+      when: ansible_check_mode is not defined
+      failed_when: false
 
-- name: Configure hosts file
-  template:
-    src: hosts.j2
-    dest: /etc/hosts
-    owner: root
-    group: root
-    mode: '0644'
-  when: baseline_hosts is defined 
+    - name: Configure DNS servers
+      lineinfile:
+        path: /etc/resolv.conf
+        regexp: "^nameserver {{ item }}"
+        line: "nameserver {{ item }}"
+        state: present
+      loop: "{{ baseline_dns_servers }}"
+      when: baseline_dns_servers is defined
+
+  when: baseline_dns_servers is defined and baseline_dns_servers | length > 0
+
+- name: Configure hosts file entries
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ item.ip }}\\s+{{ item.hostname }}"
+    line: "{{ item.ip }}\t{{ item.hostname }}{{ ' ' + item.aliases | join(' ') if item.aliases is defined else '' }}"
+    state: present
+  loop: "{{ baseline_hosts_entries | default([]) }}"
+  when: baseline_hosts_entries is defined and baseline_hosts_entries | length > 0 

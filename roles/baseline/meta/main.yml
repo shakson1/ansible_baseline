@@ -1,7 +1,11 @@
 ---
 galaxy_info:
-  author: Ansible Baseline Role
-  description: Comprehensive baseline Linux setup role for Debian and RedHat systems
+  author: Shako Kakhadze
+  description: >
+    Comprehensive, production-ready Ansible role for baseline configuration
+    and hardening of Linux servers. Supports both Debian/Ubuntu and
+    RedHat/CentOS/Rocky distributions with advanced security hardening,
+    monitoring, backup, and recovery capabilities.
   company: 
   license: MIT
   min_ansible_version: 2.9
@@ -11,14 +15,26 @@ galaxy_info:
         - all
     - name: Ubuntu
       versions:
+        - "18.04"
+        - "20.04"
+        - "22.04"
         - all
     - name: EL
       versions:
-        - 7
-        - 8
-        - 9
+        - "7"
+        - "8"
+        - "9"
     - name: Fedora
       versions:
+        - "35"
+        - "36"
+        - "37"
+        - "38"
+        - all
+    - name: RockyLinux
+      versions:
+        - "8"
+        - "9"
         - all
   galaxy_tags:
     - system
@@ -29,5 +45,15 @@ galaxy_info:
     - firewall
     - ssh
     - logging
+    - backup
+    - recovery
+    - compliance
+    - enterprise
+    - production
+  role_name: baseline
 
-dependencies: [] 
+dependencies: []
+
+collections:
+  - name: community.general
+    version: ">=3.0.0" 

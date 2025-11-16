@@ -2,12 +2,16 @@
 # Validation and error handling tasks
 
 - name: Validate required variables
-  fail:
-    msg: "{{ item }}"
-  when: "{{ item.var | default('') | length == 0 }}"
-  loop:
-    - { var: "{{ baseline_admin_user }}", msg: "baseline_admin_user is required" }
-    - { var: "{{ baseline_admin_password }}", msg: "baseline_admin_password is required" }
+  block:
+    - name: Check admin user is set
+      fail:
+        msg: "baseline_admin_user is required"
+      when: baseline_admin_user | default('') | length == 0
+
+    - name: Check admin password is set
+      fail:
+        msg: "baseline_admin_password is required"
+      when: baseline_admin_password | default('') | length == 0
 
 - name: Validate SSH key format
   fail:
@@ -32,17 +36,13 @@
 - name: Validate SSH port
   fail:
     msg: "SSH port must be between 1 and 65535"
-  when: 
-    - baseline_ssh_port < 1
-    - baseline_ssh_port > 65535
+  when: baseline_ssh_port < 1 or baseline_ssh_port > 65535
 
 - name: Validate firewall ports
   fail:
     msg: "Firewall port {{ item }} must be between 1 and 65535"
-  when: 
-    - item < 1
-    - item > 65535
-  loop: "{{ baseline_firewall_allowed_ports }}"
+  when: item < 1 or item > 65535
+  loop: "{{ baseline_firewall_allowed_ports | default([]) }}"
 
 - name: Check system requirements
   block:

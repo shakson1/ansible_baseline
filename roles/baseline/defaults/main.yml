@@ -20,6 +20,7 @@ baseline_security_hardening: true
 baseline_advanced_monitoring: false
 baseline_backup_enabled: true
 baseline_log_aggregation: false
+baseline_auto_reboot: false
 
 # SSH configuration
 baseline_ssh_port: 22

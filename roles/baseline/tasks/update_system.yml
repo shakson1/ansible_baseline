@@ -2,35 +2,92 @@
 # Update system packages
 
 - name: Update package cache (Debian)
-  apt:
-    update_cache: yes
-    cache_valid_time: 3600
+  block:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      register: apt_update_result
+      changed_when: "'updated' in apt_update_result.cache_update_time"
+
+    - name: Display update status
+      debug:
+        msg: "Package cache updated successfully"
+      when: apt_update_result.changed
+
   when: ansible_os_family == "Debian"
+  tags:
+    - packages
+    - update
 
 - name: Update package cache (RedHat)
-  dnf:
-    update_cache: yes
+  block:
+    - name: Update dnf cache
+      dnf:
+        update_cache: yes
+      register: dnf_update_result
+
+    - name: Display update status
+      debug:
+        msg: "Package cache updated successfully"
+      when: dnf_update_result.changed
+
   when: ansible_os_family == "RedHat"
+  tags:
+    - packages
+    - update
 
 - name: Upgrade all packages (Debian)
-  apt:
-    upgrade: yes
-    autoremove: yes
+  block:
+    - name: Upgrade packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: apt_upgrade_result
+
+    - name: Display upgrade summary
+      debug:
+        msg: "{{ apt_upgrade_result.stdout_lines | select('match', '^[0-9]+ upgraded') | list | first | default('Packages upgraded') }}"
+      when: apt_upgrade_result.changed
+
   when: ansible_os_family == "Debian"
+  tags:
+    - packages
+    - upgrade
 
 - name: Upgrade all packages (RedHat)
-  dnf:
-    name: '*'
-    state: latest
+  block:
+    - name: Upgrade packages
+      dnf:
+        name: '*'
+        state: latest
+        autoremove: yes
+      register: dnf_upgrade_result
+
+    - name: Display upgrade summary
+      debug:
+        msg: "{{ dnf_upgrade_result.results | selectattr('changed', 'equalto', true) | list | length | default(0) }} packages upgraded"
+      when: dnf_upgrade_result.changed
+
   when: ansible_os_family == "RedHat"
+  tags:
+    - packages
+    - upgrade
 
 - name: Clean package cache (Debian)
   apt:
     autoclean: yes
     autoremove: yes
   when: ansible_os_family == "Debian"
+  tags:
+    - packages
+    - cleanup
 
 - name: Clean package cache (RedHat)
   dnf:
     autoremove: yes
-  when: ansible_os_family == "RedHat" 
+  when: ansible_os_family == "RedHat"
+  tags:
+    - packages
+    - cleanup 
